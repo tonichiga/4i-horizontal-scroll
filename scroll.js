@@ -1,74 +1,161 @@
 class Scroll {
-  constructor(options) {}
+  constructor() {
+    this.handleScroll = this.handleScroll.bind(this);
+    this.resizeHandler = this.resizeHandler.bind(this);
+  }
 
+  start = "0vh";
+  top = 0;
+  finishCoords = 0;
   target = null;
-  animatedElement = null;
-  clientRectContainer = 0;
+  observer = null;
+  root = null;
+  parentTarget = null;
+  onScrollEvent = null;
+  direction = "left";
+  pagePositionY = 0;
 
-  connect(animatedElement, options) {
-    const { container, threshold, scrollPanel } = options;
+  connect({ root, target, start = 0, onScrollEvent }) {
+    this.start = start;
+    this.target = target;
+    this.root = root;
+    this.onScrollEvent = onScrollEvent;
+    this.setDefaultStyles();
+    this.calculateOffsettarget();
+    this.resizeInit();
+  }
 
+  setDefaultStyles() {
+    const parentNode = this.target.parentNode;
+    const wrapper = document.createElement("div");
+    parentNode.replaceChild(wrapper, this.target);
+    wrapper.appendChild(this.target);
+    this.parentTarget = wrapper;
+
+    this.root.style.position = "relative";
+    this.root.style.width = "100%";
+    this.target.style.transition = "transform 150ms ease-out";
+    document.body.style.overflowX = "hidden";
+
+    this.parentTarget.style.display = "block";
+    this.parentTarget.style.position = "sticky";
+    this.parentTarget.style.overflow = "hidden";
+    this.parentTarget.style.top = this.start;
+    this.parentTarget.style.minHeight = `70vh`;
+
+    this.setRootHeight();
+  }
+
+  setRootHeight() {
+    const height = this.target.clientWidth - window.innerWidth;
+    const percent = height * 0.05;
+    this.root.style.height = `${height + percent}px`;
+  }
+
+  calculateOffsettarget() {
+    let rect = this.target.getBoundingClientRect();
+    this.top = rect.top + window.scrollY;
+    this.finishCoords = rect.width - window.innerHeight;
+
+    this.onScroll();
+  }
+
+  handleScroll() {
+    const lastKnownScrollPosition = window.scrollY - this.top;
+    let differenceOffset =
+      (this.root.clientWidth / this.target.clientWidth) * 100;
+    const offset = 100 - differenceOffset;
+
+    if (lastKnownScrollPosition < 0) return;
+
+    if (this.pagePositionY > lastKnownScrollPosition) {
+      //direction
+      this.direction = "left";
+    } else {
+      this.direction = "right";
+    }
+
+    this.pagePositionY = lastKnownScrollPosition;
+
+    let progress = (lastKnownScrollPosition / this.finishCoords) * 100;
+    let progressWithOffset = (progress / offset) * 100;
+
+    if (typeof this.onScrollEvent === "function") {
+      this.onScrollEvent(progressWithOffset);
+    }
+
+    if (progress >= offset) {
+      progress = offset;
+    }
+
+    if (Math.abs(progress) < 3) {
+      progress = 0;
+    }
+
+    this.scrollAnimation(this.target, progress, this.duration);
+  }
+
+  onScroll() {
+    document.addEventListener("scroll", this.handleScroll);
+  }
+
+  disconnect() {
+    document.removeEventListener("scroll", this.handleScroll);
+  }
+
+  observe({ target, options, onEntryCallback }) {
     const observerOptions = {
       root: null,
       rootMargin: "0px",
       threshold: 0.1,
+      ...options,
     };
 
-    this.animatedElement = animatedElement;
-    observerOptions.threshold = threshold || 0.96;
-
-    this.setDefaultStyles(container, scrollPanel);
-    this.calculateOffsetScrollPanel(container, scrollPanel);
-    this.observeInitialize(animatedElement, observerOptions);
-    this.setTransformAnimatedElement(container);
+    this.observeInitialize(target, observerOptions, onEntryCallback);
   }
 
-  observeInitialize(target, options) {
-    const observer = new IntersectionObserver((entries, observer) => {
+  unobserve() {
+    if (this.observer) {
+      this.observer.unobserve(this.parentTarget);
+    }
+  }
+
+  observeInitialize(target, options, cb) {
+    this.observer = new IntersectionObserver((entries, observer) => {
       entries.forEach((entry) => {
+        if (typeof cb === "function") {
+          cb(entry);
+        }
+
         if (entry.isIntersecting) {
-          console.log("entry", entry);
-          entry.target.style.position = "sticky";
-          entry.target.style.top = "0px";
+          observer.unobserve(entry.target);
         }
       });
     }, options);
-    observer.observe(target);
-  }
 
-  setDefaultStyles(container, scrollPanel) {
-    container.style.position = "relative";
-    scrollPanel.style.transition = "transform 150ms ease-out";
-    this.setContainerHeight(container, scrollPanel.clientWidth);
-  }
-
-  setContainerHeight(container, width) {
-    container.style.height = `${width}px`;
-  }
-
-  setTransformAnimatedElement(container) {
-    // container.style.transform = `translate3d(0px, 0px, 0px)`;
-  }
-
-  calculateOffsetScrollPanel(container, scrollPanel) {
-    let rect = scrollPanel.getBoundingClientRect();
-    const finishCoords = rect.width - rect.top + container.clientWidth;
-    let progress = 0;
-    let lastKnownScrollPosition = 0;
-    function onScroll() {
-      lastKnownScrollPosition = window.scrollY - rect.top;
-
-      if (lastKnownScrollPosition < 0) return;
-
-      progress = (lastKnownScrollPosition / finishCoords) * 100;
-      console.log(progress);
-
-      if (progress >= 83.5) return;
-      scrollPanel.style.transform = `translate(-${progress}%, 0px)`;
+    if (Array.isArray(target)) {
+      target.forEach((item) => {
+        if (item) {
+          this.observer.observe(item);
+        }
+      });
+    } else {
+      this.observer.observe(target);
     }
+  }
 
-    document.addEventListener("scroll", onScroll);
+  resizeHandler() {
+    this.setRootHeight();
+    this.calculateOffsettarget();
+  }
+
+  resizeInit() {
+    window.addEventListener("resize", this.resizeHandler);
+  }
+
+  scrollAnimation(target, to, duration = 150) {
+    target.style.transform = `translate3d(-${to}%, 0, 0)`;
   }
 }
 
-export default new Scroll();
+export default Scroll;
