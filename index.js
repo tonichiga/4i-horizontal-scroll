@@ -1,3 +1,3 @@
-import Scroll from "./scroll.js
+import Scroll from "./dist/scroll.js";
 
-export {Scroll as default}
+export default Scroll;
