@@ -87,7 +87,6 @@ class Scroll {
     let differenceOffset = (targetWidth / this.target.clientWidth) * 100;
     const offset = 100 - differenceOffset;
 
-    console.log("Diff", differenceOffset);
 
     if (lastKnownScrollPosition < 0) return;
 
